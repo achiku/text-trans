@@ -152,3 +152,68 @@ class TextTrans:
             sublines1 = subline_with_upper_limit(line, next_index, n)
 
             yield sublines0, sublines1
+
+def bigram(word):
+    for i, c in enumerate(word):
+        if len(word) > i+1:
+            pair = (c, word[i+1])
+        else:
+            pair = (c, '\x00')
+        yield pair
+
+def create_matrix(file_path):
+    char_matrix = defaultdict(lambda: defaultdict(int))
+    with open('../examples/en_words.txt') as f:
+        for l in f.readlines():
+            word = l.strip()
+            for a, b in bigram(word):
+                char_matrix[a][b] += 1
+
+    # max normalization constant
+    # これなんで50で決め打ちしているんだろうか
+    max_nc = 0
+    for k, v in char_matrix.items():
+        s = float(sum(v.values()))
+        if max_nc < s:
+            max_nc = s
+    if max_nc == 0:
+        max_nc = 50
+
+    # to reduce data size, it calculates prob of patterns not in training data
+    # 分母は正規化定数の倍、分子は1の数値の自然対数取る
+    null_prob = math.log(1 / (max_nc * 2))
+
+    # normalize
+    for key0, dict0 in char_matrix.items():
+        total = float(sum(dict0.values()))
+        # total = 辞書から抽出した単語の中でkey0=aの次に何個文字があるか、aの次の文字全部の数
+        # ユニークな数ではなく、現れた回数なので辞書のサイズに依存する
+        for key1, value1 in dict0.items():
+            # aの次に来る文字key1=bが辞書の中の単語で何回出たか
+            if value1 > 0:
+            # value1が0の場合もある(辞書にそういう文字が出てこない場合)
+                dict0[key1] = math.log(float(value1) / total)
+                # 単語の集合の中でaの次にbが出る割合は何か = value1/total
+                # その後自然対数を通して正規化する
+    return {'matrix': char_matrix, 'null_prob': null_prob}
+
+def prob(mat, word):
+    log_prob = 0.0
+    trans_ct = 0
+    for a, b in bigram(word):
+        p = _calc_prob(a, b)
+        log_prob += p
+        trans_ct += 1
+    prob = math.exp(log_prob / (trans_ct or 1))
+    return prob
+
+def _calc_prob(c1, c2, matrix, null_prob):
+    tmp_d = matrix
+    tmp_v = null_Prob
+    for key in [c1, c2]:
+        tmp_v = tmp_d.get(key, null_prob)
+        if isinstance(tmp_v, dict):
+            tmp_d = tmp_v
+        else:
+            break
+    return tmp_v
